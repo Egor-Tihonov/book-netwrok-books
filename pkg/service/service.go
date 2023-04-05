@@ -1,6 +1,6 @@
 package service
 
-import "github.com/Egor-Tihonov/book-netwrok-books.git/internal/repository"
+import "github.com/Egor-Tihonov/book-netwrok-books.git/pkg/repository"
 
 type Service struct {
 	repo *repository.PostgresDB

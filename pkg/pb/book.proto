@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package book;
+
+option go_package = "./pkg/pb";
+
+service BookService{
+    rpc GetBooks(GetBooksRequest) returns (GetBooksResponse){}
+    rpc GetAuthors(GetAuthorsRequest) returns (GetAuthorsResponse){}
+    rpc CheckBook(CheckBookRequest) returns (CheckBookResponse){}
+    rpc GetBookId(GetBookIdRequest) returns(GetBookIdResponse){}
+}
+
+
+message GetBookIdRequest{
+    Book book = 1;
+}
+
+message GetBookIdResponse{
+    string id = 1;
+}
+
+// Check book and author for post
+message CheckBookRequest{
+    string name = 1;
+    string surname = 2;
+    string title = 3;
+}
+
+message CheckBookResponse{
+    string bookid  = 1;
+    string authorid = 2;
+}
+
+// Get all books
+message GetBooksRequest{}
+message GetBooksResponse{
+    repeated Book books = 1;
+}
+
+// Get al authors
+message GetAuthorsRequest{}
+message GetAuthorsResponse{
+    repeated Author authors = 1;
+}
+
+// models
+message Book{
+    string bookid  = 1;
+    string title = 2;
+    Author author = 3;
+}
+
+message Author{
+    string authorid = 1;
+    string name = 2;
+    string surname = 3;
+}

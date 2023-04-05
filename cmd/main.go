@@ -1,53 +1,70 @@
 package main
 
 import (
-	"net/http"
+	"fmt"
+	"net"
+	"runtime"
+	"strings"
 
-	"github.com/Egor-Tihonov/book-netwrok-books.git/internal/config"
-	"github.com/Egor-Tihonov/book-netwrok-books.git/internal/handler"
-	mid "github.com/Egor-Tihonov/book-netwrok-books.git/internal/middleware"
-	"github.com/Egor-Tihonov/book-netwrok-books.git/internal/repository"
-	"github.com/Egor-Tihonov/book-netwrok-books.git/internal/service"
-	"github.com/caarlos0/env"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/Egor-Tihonov/book-netwrok-books.git/pkg/config"
+	"github.com/Egor-Tihonov/book-netwrok-books.git/pkg/handlers"
+	pb "github.com/Egor-Tihonov/book-netwrok-books.git/pkg/pb"
+	"github.com/Egor-Tihonov/book-netwrok-books.git/pkg/repository"
+	"github.com/Egor-Tihonov/book-netwrok-books.git/pkg/service"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 func main() {
-	cfg := config.Config{}
-	err := env.Parse(&cfg)
+	InitLog()
+	
+	c, err := config.LoadConfig()
+
 	if err != nil {
-		logrus.Fatalf("Error parsing env %w", err)
+		logrus.Fatalf("book service: error load configs: %w", err)
 	}
-	logrus.Info("config: ", cfg)
 
-	repo, err := repository.New("postgresql://postgres:123@localhost:5432/booknetwork_books")
+	dbP, err := repository.New(c.DBUrl)
 	if err != nil {
-		logrus.Fatalf("Connection was failed, %w", err)
+		logrus.Fatalf("book service: error connecting to db, %w", err)
 	}
-	defer repo.Pool.Close()
 
-	srv := service.New(repo)
+	lis, err := net.Listen("tcp", c.Port)
 
-	h := handler.New(srv)
-
-	e := echo.New()
-
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
-		AllowOrigins:     []string{"http://localhost:3000"},
-		AllowMethods:     []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPatch, http.MethodPost, http.MethodDelete},
-		AllowCredentials: true,
-	}))
-	e.Use(mid.IsLoggedIn)
-
-	e.GET("/books", h.GetAllBooks)
-	e.POST("/new-book", h.CreateBook)
-
-	err = e.Start(":8050")
 	if err != nil {
-		repo.Pool.Close()
-		logrus.Fatalf("error started service")
+		logrus.Fatalln("book service: Failed to listing:", err)
 	}
+
+	logrus.Info("------ START SERVER ON ", c.Port, " ------")
+
+	s := service.New(dbP)
+	h := handlers.New(s)
+
+	grpcServer := grpc.NewServer()
+
+	pb.RegisterBookServiceServer(grpcServer, h)
+
+	if err := grpcServer.Serve(lis); err != nil {
+		logrus.Fatalln("Book service: Failed to serve:", err)
+	}
+}
+
+func InitLog() {
+	logrus.SetReportCaller(true)
+
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp:   true,
+		TimestampFormat: "2006-01-02 15:04:05",
+		ForceColors:     true,
+		DisableColors:   false,
+		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+			return "", fmt.Sprintf(" %s:%d", formatFilePath(f.File), f.Line)
+		},
+	})
+
+}
+
+func formatFilePath(path string) string {
+	arr := strings.Split(path, "/")
+	return arr[len(arr)-1]
 }
